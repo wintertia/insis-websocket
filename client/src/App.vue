@@ -64,11 +64,16 @@ export default {
       };
 
       this.websocket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        this.messages.push(message);
-        this.$nextTick(() => {
-          this.scrollToBottom();
-        });
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'announcement') {
+          this.displayAnnouncement(data.message);
+        } else {
+          this.messages.push(data);
+          this.$nextTick(() => {
+            this.scrollToBottom();
+          });
+        }
       };
 
       this.websocket.onclose = () => {
@@ -112,6 +117,13 @@ export default {
       if (!timestamp) return '';
       const date = new Date(timestamp);
       return date.toLocaleTimeString();
+    },
+
+    displayAnnouncement(message) {
+      const announcementElement = document.createElement('div');
+      announcementElement.classList.add('announcement');
+      announcementElement.textContent = `📢 ANNOUNCEMENT: ${message}`;
+      this.$refs.chatBox.appendChild(announcementElement);
     }
   },
   
@@ -233,5 +245,15 @@ export default {
 .send-button:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+.announcement {
+  background-color: #FFEB3B;
+  color: #333;
+  padding: 10px;
+  margin: 10px auto;
+  text-align: center;
+  font-weight: bold;
+  border-radius: 5px;
 }
 </style>
