@@ -19,6 +19,10 @@ const clients = new Set();
 // Set maximum number of clients
 const MAX_CLIENTS = 5;
 
+// Add these constants at the top with your other constants
+const HEARTBEAT_INTERVAL = 15000; // Send ping every 15 seconds
+const CLIENT_TIMEOUT = 60000; // Client considered dead after 60 seconds of no response
+
 // Function to broadcast announcements to all clients
 function broadcastAnnouncement(message) {
   const announcement = {
@@ -56,6 +60,24 @@ function processCommand(input) {
     console.log('/announce <message> - Send announcement to all clients');
     console.log('/clients - Show number of connected clients');
     console.log('/help - Show available commands');
+    console.log('/health - Check connection health');
+  } else if (trimmedInput === '/health') {
+    let healthy = 0;
+    let stale = 0;
+    const now = Date.now();
+    
+    clients.forEach(client => {
+      // Consider a client stale if:
+      // 1. isAlive flag is false, OR
+      // 2. No pong received for a significant time
+      if (client.isAlive && (now - client.lastPongTime < CLIENT_TIMEOUT / 2)) {
+        healthy++;
+      } else {
+        stale++;
+      }
+    });
+    
+    console.log(`Connection health: ${healthy} healthy, ${stale} stale connections`);
   } else if (trimmedInput) {
     console.log('Unknown command. Type /help for available commands');
   }
@@ -83,6 +105,16 @@ wss.on('connection', (ws) => {
   
   console.log('Client connected');
   clients.add(ws);
+  
+  // Initial setup when client connects
+  ws.isAlive = true;
+  ws.lastPongTime = Date.now();
+  
+  // Handle pong responses from client
+  ws.on('pong', () => {
+    ws.isAlive = true;
+    ws.lastPongTime = Date.now();
+  });
   
   // Send welcome message to the new client
   ws.send(JSON.stringify({
@@ -152,6 +184,37 @@ wss.on('connection', (ws) => {
       }
     });
   });
+});
+
+// Create the heartbeat interval
+const heartbeatInterval = setInterval(() => {
+  const now = Date.now();
+  
+  wss.clients.forEach(ws => {
+    // Check if time since last pong exceeds timeout
+    if (ws.lastPongTime && now - ws.lastPongTime > CLIENT_TIMEOUT) {
+      console.log('Client timed out after inactivity');
+      ws.isAlive = false; // Mark as not alive before terminating
+      return ws.terminate();
+    }
+    
+    // Mark as not alive before sending ping
+    // This way clients will show as stale if they don't respond
+    ws.isAlive = false;
+    
+    // Send ping (using WebSocket protocol ping frame)
+    try {
+      ws.ping();
+    } catch (e) {
+      console.error('Error sending ping:', e);
+      ws.terminate();
+    }
+  });
+}, HEARTBEAT_INTERVAL);
+
+// Stop the interval when server closes
+wss.on('close', () => {
+  clearInterval(heartbeatInterval);
 });
 
 // Define the port

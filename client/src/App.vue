@@ -56,7 +56,10 @@ export default {
       message: '',
       messages: [],
       pingTime: null,
-      latency: null
+      latency: null,
+      heartbeatInterval: null,
+      lastServerResponse: Date.now(),
+      connectionHealthy: true,
     }
   },
   methods: {
@@ -95,11 +98,15 @@ export default {
       this.websocket.onopen = () => {
         console.log('Connected to the server');
         this.connected = true;
+        this.startHeartbeatCheck();
       };
 
       this.websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
+        this.lastServerResponse = Date.now();
+        this.connectionHealthy = true;
+
         if (data.type === 'pong' && this.pingTime) {
           const latency = Date.now() - data.timestamp;
           this.latency = latency;
@@ -178,6 +185,35 @@ export default {
       announcementElement.classList.add('announcement');
       announcementElement.textContent = `📢 ANNOUNCEMENT: ${message}`;
       this.$refs.chatBox.appendChild(announcementElement);
+    },
+
+    startHeartbeatCheck() {
+      this.heartbeatInterval = setInterval(() => {
+        const now = Date.now();
+        if (now - this.lastServerResponse > 45000) {
+          if (this.connectionHealthy) {
+            this.connectionHealthy = false;
+            console.log('Connection appears to be dead, attempting to reconnect');
+            this.messages.push({
+              type: 'system',
+              message: 'Connection to server lost. Attempting to reconnect...',
+              timestamp: new Date().toISOString()
+            });
+            
+            if (this.websocket) {
+              this.websocket.close();
+              setTimeout(() => this.connect(), 2000);
+            }
+          }
+        }
+      }, 30000);
+    },
+    
+    stopHeartbeatCheck() {
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
     }
   },
   
@@ -185,6 +221,7 @@ export default {
     if (this.websocket) {
       this.websocket.close();
     }
+    this.stopHeartbeatCheck();
   }
 }
 </script>
