@@ -106,6 +106,18 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const parsedMessage = JSON.parse(message);
+      
+      // Handle ping messages
+      if (parsedMessage.type === 'ping') {
+        // Reply with pong message and "Pong!" text
+        ws.send(JSON.stringify({
+          type: 'pong',
+          message: 'Pong!',
+          timestamp: parsedMessage.timestamp
+        }));
+        return;
+      }
+      
       console.log(`Received: ${parsedMessage.message}`);
 
       // Broadcast message to all connected clients

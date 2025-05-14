@@ -2,6 +2,14 @@
   <div class="chat-container">
     <header class="header">
       <h1>Simple WebSocket Chat</h1>
+      <div v-if="connected" class="connection-status">
+        <button @click="sendPing" class="ping-button">
+          Ping Server
+        </button>
+        <span v-if="latency !== null" class="latency">
+          Last ping: {{ latency }}ms
+        </span>
+      </div>
     </header>
     
     <div class="chat-box" ref="chatBox">
@@ -46,10 +54,36 @@ export default {
       connected: false,
       username: '',
       message: '',
-      messages: []
+      messages: [],
+      pingTime: null,
+      latency: null
     }
   },
   methods: {
+    sendPing() {
+      if (!this.connected || !this.websocket) {
+        this.messages.push({
+          type: 'system',
+          message: 'Not connected to server',
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+      
+      this.pingTime = Date.now();
+      
+      this.websocket.send(JSON.stringify({
+        type: 'ping',
+        timestamp: this.pingTime
+      }));
+      
+      this.messages.push({
+        type: 'system',
+        message: 'Pinging server...',
+        timestamp: new Date().toISOString()
+      });
+    },
+    
     connect() {
       if (!this.username.trim()) {
         alert('Please enter a username');
@@ -66,12 +100,25 @@ export default {
       this.websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
+        if (data.type === 'pong' && this.pingTime) {
+          const latency = Date.now() - data.timestamp;
+          this.latency = latency;
+          
+          this.messages.push({
+            type: 'system',
+            message: `${data.message} (${latency}ms)`,
+            timestamp: new Date().toISOString()
+          });
+          
+          this.pingTime = null;
+          return;
+        }
+        
         if (data.type === 'announcement') {
           this.displayAnnouncement(data.message);
         } else {
           this.messages.push(data);
           
-          // Check if this is a connection rejection message
           if (data.type === 'system' && 
               data.message.includes('Connection rejected: Server has reached maximum capacity')) {
             this.connected = false;
@@ -165,6 +212,31 @@ export default {
   background-color: #4CAF50;
   color: white;
   border-radius: 5px 5px 0 0;
+}
+
+.connection-status {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ping-button {
+  padding: 5px 10px;
+  background-color: #1976D2;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.ping-button:hover {
+  background-color: #1565C0;
+}
+
+.latency {
+  font-size: 0.9em;
+  color: #333;
 }
 
 .chat-box {
