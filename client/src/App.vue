@@ -70,6 +70,13 @@ export default {
           this.displayAnnouncement(data.message);
         } else {
           this.messages.push(data);
+          
+          // Check if this is a connection rejection message
+          if (data.type === 'system' && 
+              data.message.includes('Connection rejected: Server has reached maximum capacity')) {
+            this.connected = false;
+          }
+          
           this.$nextTick(() => {
             this.scrollToBottom();
           });

@@ -16,6 +16,9 @@ const wss = new WebSocket.Server({ server });
 // Store connected clients
 const clients = new Set();
 
+// Set maximum number of clients
+const MAX_CLIENTS = 5;
+
 // Function to broadcast announcements to all clients
 function broadcastAnnouncement(message) {
   const announcement = {
@@ -64,6 +67,20 @@ rl.on('line', processCommand);
 
 // Handle WebSocket connections
 wss.on('connection', (ws) => {
+  // Check if client limit has been reached
+  if (clients.size >= MAX_CLIENTS) {
+    console.log('Connection rejected: Maximum client limit reached');
+    ws.send(JSON.stringify({
+      type: 'system',
+      message: 'Connection rejected: Server has reached maximum capacity of 10 users',
+      timestamp: new Date().toISOString()
+    }));
+    
+    // Close the connection
+    ws.close();
+    return;
+  }
+  
   console.log('Client connected');
   clients.add(ws);
   
